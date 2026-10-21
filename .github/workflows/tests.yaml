@@ -1,14 +1,16 @@
 name: Tests
 on:
-  pull_request:
-    paths-ignore: ['docs/**', 'README.md']
-  push:
-    branches: [main, stable]
-    paths-ignore: ['docs/**', 'README.md']
+  workflow_dispatch:
+    inputs:
+      test-filter:
+        description: 'pytest selector passed through tox posargs (empty = full suite)'
+        required: false
+        default: ''
 jobs:
   tests:
     name: ${{ matrix.name || matrix.python }}
     runs-on: ${{ matrix.os || 'ubuntu-latest' }}
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -33,9 +35,13 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python }}
-      - run: uv run --locked --no-default-groups --group dev tox run -e ${{ matrix.tox || format('py{0}', matrix.python) }}
+      # fork checkout path (<repo>-<hash>/<repo>-<hash>) is long enough that the
+      # unix-socket test's basetemp path exceeds AF_UNIX's 104/108-byte limit;
+      # keep tox envs (and their basetemp) under the short runner temp dir
+      - run: uv run --locked --no-default-groups --group dev tox run --workdir "${{ runner.temp }}/tox" -e ${{ matrix.tox || format('py{0}', matrix.python) }} -- ${{ inputs.test-filter }}
   typing:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: astral-sh/setup-uv@eac588ad8def6316056a12d4907a9d4d84ff7a3b # v7.3.0

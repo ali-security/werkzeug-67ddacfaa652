@@ -1,10 +1,10 @@
 name: Publish
 on:
-  push:
-    tags: ['*']
+  workflow_dispatch:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       artifact-id: ${{ steps.upload-artifact.outputs.artifact-id }}
     steps:
@@ -18,7 +18,12 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version-file: pyproject.toml
-      - run: echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
+      # fork commits move HEAD's date; pin the upstream 3.1.8 tag commit date
+      - run: echo "SOURCE_DATE_EPOCH=1775150733" >> $GITHUB_ENV
+      # pin the backend that built the public wheel (WHEEL Generator: flit 3.12.0)
+      - run: |
+          echo "flit_core==3.12.0" > "${RUNNER_TEMP}/build-constraints.txt"
+          echo "UV_BUILD_CONSTRAINT=${RUNNER_TEMP}/build-constraints.txt" >> $GITHUB_ENV
       - run: uv build
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         id: upload-artifact
@@ -28,7 +33,9 @@ jobs:
           if-no-files-found: error
   create-release:
     needs: [build]
+    if: false
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
@@ -42,10 +49,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
   publish-pypi:
     needs: [build]
+    if: false
     environment:
       name: publish
       url: https://pypi.org/project/Werkzeug/${{ github.ref_name }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       id-token: write
     steps:
